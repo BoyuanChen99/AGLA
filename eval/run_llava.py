@@ -21,6 +21,7 @@ import torch
 from lavis.models import load_model_and_preprocess
 from torchvision import transforms
 from lavis.common.registry import registry
+import numpy as np
 
 
 def eval_model(args):
@@ -34,7 +35,7 @@ def eval_model(args):
                                                                            model_name=model_name, 
                                                                            model_base=args.model_base, 
                                                                            load_8bit=False, 
-                                                                           load_4bit=False
+                                                                           load_4bit=False,
                                                                            )
     questions = [json.loads(q) for q in open(os.path.expanduser(args.question_file), "r")]
     answers_file = os.path.expanduser(args.answers_file)
@@ -69,10 +70,10 @@ def eval_model(args):
         input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).cuda()
 
         raw_image = Image.open(os.path.join(args.image_folder, image_file)).convert('RGB')
-
-        raw_image_tensor = image_processor.preprocess(raw_image, return_tensors='pt')['pixel_values'][0]
+        raw_image_tensor = image_processor.preprocess(raw_image, return_tensors='pt')['pixel_values'].half().cuda()
         
         if args.use_agla:
+            print(f"\n\n===== Using AGLA augmentation for {image_file} =====\n\n")
             tensor_image = loader(raw_image.resize((384,384)))
             image = vis_processors["eval"](raw_image).unsqueeze(0).to(device)
             question = text_processors["eval"](question)
@@ -98,7 +99,8 @@ def eval_model(args):
                 top_p=args.top_p,
                 top_k=args.top_k,
                 max_new_tokens=1024,
-                use_cache=True)
+                use_cache=True
+            )
             
         input_token_len = input_ids.shape[1]
         n_diff_input_output = (input_ids != output_ids[:, :input_token_len]).sum().item()
@@ -137,7 +139,7 @@ if __name__ == "__main__":
     parser.add_argument("--model-base", type=str, default=None)
     parser.add_argument("--image-folder", type=str, default=f"{data_dir}/coco/val2014")
     parser.add_argument("--question-file", type=str, default=f"{workspace}/data/POPE/coco/coco_pope_adversarial.json")
-    parser.add_argument("--answers-file", type=str, default="/workspace/10_AGLA/eval/output/test.jsonl")
+    parser.add_argument("--answers-file", type=str, default=f"{workspace}/output/test.jsonl")
     parser.add_argument("--conv-mode", type=str, default="llava_v1")
     parser.add_argument("--num-chunks", type=int, default=1)
     parser.add_argument("--chunk-idx", type=int, default=0)
