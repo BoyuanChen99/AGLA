@@ -20,14 +20,22 @@ from PIL import Image
 import torch
 from lavis.models import load_model_and_preprocess
 from torchvision import transforms
-from lavis.common.registry import registry 
+from lavis.common.registry import registry
 
 
 def eval_model(args):
+    ### Step 0: Load LLaVA-v1.5
     disable_torch_init()
+    model_author = "liuhaotian"
+    model_name = "llava-v1.5-7b"
     model_path = os.path.expanduser(args.model_path)
-    model_name = get_model_name_from_path(model_path)
-    tokenizer, model, image_processor, context_len = load_pretrained_model(model_path, args.model_base, model_name)
+    # model_name = get_model_name_from_path(model_path)
+    tokenizer, model, image_processor, context_len = load_pretrained_model(f"{model_author}/{model_name}",  
+                                                                           model_name=model_name, 
+                                                                           model_base=args.model_base, 
+                                                                           load_8bit=False, 
+                                                                           load_4bit=False
+                                                                           )
     questions = [json.loads(q) for q in open(os.path.expanduser(args.question_file), "r")]
     answers_file = os.path.expanduser(args.answers_file)
     os.makedirs(os.path.dirname(answers_file), exist_ok=True)
@@ -38,6 +46,8 @@ def eval_model(args):
     model_itm, vis_processors, text_processors = load_model_and_preprocess("blip_image_text_matching", "large", device=device, is_eval=True)
     loader = transforms.Compose([transforms.ToTensor()])
     
+
+    ### Step 1: Loop through the questions
     for line in tqdm(questions):
         idx = line["question_id"]
         image_file = line["image"]
@@ -111,11 +121,22 @@ def eval_model(args):
 
 
 if __name__ == "__main__":
+    HUGGINGFACE_CACHE = os.environ.get('HUGGINGFACE_CACHE')
+    # Find agla workspace
+    cwd = os.getcwd()
+    marker = "AGLA"
+    if marker in cwd:
+        workspace = cwd[:cwd.rfind(marker) + len(marker)]
+    else:
+        raise ValueError(f'"{marker}" not found in current path.')
+    print("Workspace:", workspace)
+    # Set data path
+    data_dir = os.path.join(workspace, "../data")
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-path", type=str, default="/workspace/model/llava_1.5_7b")
+    parser.add_argument("--model-path", type=str, default=f"{HUGGINGFACE_CACHE}/liuhaotian/llava_1.5_7b")
     parser.add_argument("--model-base", type=str, default=None)
-    parser.add_argument("--image-folder", type=str, default="/workspace/data/val2014")
-    parser.add_argument("--question-file", type=str, default="/workspace/10_AGLA/data/POPE/coco/coco_pope_adversarial.json")
+    parser.add_argument("--image-folder", type=str, default=f"{data_dir}/coco/val2014")
+    parser.add_argument("--question-file", type=str, default=f"{workspace}/data/POPE/coco/coco_pope_adversarial.json")
     parser.add_argument("--answers-file", type=str, default="/workspace/10_AGLA/eval/output/test.jsonl")
     parser.add_argument("--conv-mode", type=str, default="llava_v1")
     parser.add_argument("--num-chunks", type=int, default=1)
