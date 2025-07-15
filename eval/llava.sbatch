@@ -23,4 +23,4 @@ conda activate agla
 export HF_HOME='/scratch/bc3194/huggingface_cache'
 
 # Call python script with the model variable
-python -u ace.py --dataset=jailbreakbench --cipher=substitution_grid_sentence
+python -u run_llava.py
